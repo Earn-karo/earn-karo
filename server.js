@@ -261,5 +261,5 @@ app.post('/api/admin/withdrawals/:id/review',requireAuth,requireAdmin,(req,res)=
  if(!info.changes) return res.status(404).json({error:'Pending request not found.'});
  res.json({ok:true});
 });
-app.get('*',(req,res)=>res.sendFile(path.join(__dirname,'public','index.html')));
+app.get('*',(req,res)=>res.sendFile(path.join(__dirname,'index.html')));
 app.listen(PORT,()=>console.log(`Earn Bro listening on port ${PORT}`));
