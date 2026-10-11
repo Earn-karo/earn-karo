@@ -1,10 +1,16 @@
+
 {
   "name": "earn-bro-production-starter",
   "version": "1.0.0",
   "private": true,
   "description": "Earn Bro mobile-first gaming rewards starter with server-side auth and Razorpay UPI checkout",
-  "scripts": {"start": "node server.js", "dev": "node --watch server.js"},
-  "engines": {"node": ">=20"},
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": "22.x"
+  },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.8.1",
