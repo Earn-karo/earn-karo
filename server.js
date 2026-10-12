@@ -109,7 +109,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 function requireAuth(req,res,next){ if(!req.session.userId) return res.status(401).json({error:'Please log in.'}); next(); }
 function requireAdmin(req,res,next){ const user=db.prepare('SELECT role FROM users WHERE id=?').get(req.session.userId); if(!user || user.role!=='admin') return res.status(403).json({error:'Admin access required.'}); next(); }
-function getUser(id){return db.prepare('SELECT id,name,email,role,balance_paise,created_at FROM users WHERE id=?').get(id);}
+function getUser(id){return db.prepare('SELECT id,name,email,mobile,role,balance_paise,created_at FROM users WHERE id=?').get(id);}
 function csrfGuard(req,res,next){
   // SameSite cookies + JSON-only API help mitigate CSRF. For production, add a synchronizer CSRF token
   // for any cookie-authenticated state-changing endpoints and configure trusted origins.
