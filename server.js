@@ -60,7 +60,17 @@ CREATE TABLE IF NOT EXISTS webhook_events (
  received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 `);
+const userColumns = db.prepare("PRAGMA table_info(users)").all();
 
+if (!userColumns.some(col => col.name === 'mobile')) {
+  db.exec("ALTER TABLE users ADD COLUMN mobile TEXT");
+}
+
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS users_mobile_unique
+  ON users(mobile)
+  WHERE mobile IS NOT NULL AND mobile != '';
+`);
 if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
   const email = process.env.ADMIN_EMAIL.trim().toLowerCase();
   const existing = db.prepare("SELECT id FROM users WHERE role='admin' LIMIT 1").get();
@@ -112,28 +122,61 @@ app.use('/api', csrfGuard);
 
 app.get('/api/health',(req,res)=>res.json({ok:true,paymentsConfigured:razorpayReady}));
 app.post('/api/auth/signup', async (req,res)=>{
-  const name=String(req.body.name||'').trim().slice(0,50);
-  const email=String(req.body.email||'').trim().toLowerCase();
-  const password=String(req.body.password||'');
-  if(name.length<2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length<10)
-    return res.status(400).json({error:'Name, valid email, and password of at least 10 characters are required.'});
-  try{
-    const hash=await bcrypt.hash(password,12);
-    const info=db.prepare('INSERT INTO users(name,email,password_hash) VALUES(?,?,?)').run(name,email,hash);
+  const name = String(req.body.name || '').trim().slice(0,50);
+  const mobile = String(req.body.mobile || '').trim();
+  const password = String(req.body.password || '');
+
+  if (name.length < 2 || !/^[6-9]\d{9}$/.test(mobile) || password.length < 10) {
+    return res.status(400).json({
+      error: 'Name, valid 10-digit mobile number, and password of at least 10 characters are required.'
+    });
+  }
+
+  try {
+    const existing = db.prepare('SELECT id FROM users WHERE mobile = ?').get(mobile);
+    if (existing) {
+      return res.status(409).json({error:'This mobile number is already registered.'});
+    }
+
+    const hash = await bcrypt.hash(password, 12);
+    const email = `${mobile}@mobile.earnbro.local`;
+
+    const info = db.prepare(
+      'INSERT INTO users(name,email,password_hash,mobile) VALUES(?,?,?,?)'
+    ).run(name, email, hash, mobile);
+
     req.session.regenerate(err=>{
-      if(err) return res.status(500).json({error:'Could not create session.'});
-      req.session.userId=Number(info.lastInsertRowid);
+      if (err) return res.status(500).json({error:'Could not create session.'});
+      req.session.userId = Number(info.lastInsertRowid);
       res.json({user:getUser(req.session.userId)});
     });
-  }catch(e){ if(String(e.code)==='SQLITE_CONSTRAINT_UNIQUE') return res.status(409).json({error:'An account with this email already exists.'}); res.status(500).json({error:'Could not create account.'}); }
+  } catch(e) {
+    if (String(e.code) === 'SQLITE_CONSTRAINT_UNIQUE') {
+      return res.status(409).json({error:'This mobile number is already registered.'});
+    }
+    res.status(500).json({error:'Could not create account.'});
+  }
 });
 app.post('/api/auth/login', async (req,res)=>{
-  const email=String(req.body.email||'').trim().toLowerCase(), password=String(req.body.password||'');
-  const user=db.prepare('SELECT * FROM users WHERE email=?').get(email);
-  if(!user || !(await bcrypt.compare(password,user.password_hash))) return res.status(401).json({error:'Email or password is incorrect.'});
+  const identifier = String(req.body.mobile || req.body.email || '').trim();
+  const password = String(req.body.password || '');
+
+  const user = db.prepare(
+    'SELECT * FROM users WHERE mobile = ? OR email = ?'
+  ).get(identifier, identifier.toLowerCase());
+
+  if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+    return res.status(401).json({
+      error: 'Mobile number or password is incorrect.'
+    });
+  }
+
   req.session.regenerate(err=>{
-    if(err) return res.status(500).json({error:'Could not start session.'});
-    req.session.userId=user.id;
+    if (err) {
+      return res.status(500).json({error:'Could not start session.'});
+    }
+
+    req.session.userId = user.id;
     res.json({user:getUser(user.id)});
   });
 });
